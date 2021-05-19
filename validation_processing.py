@@ -1,12 +1,13 @@
 #%% Librerias utilizadas 
 import re
 import nltk
-import gensim
 import numpy as np
+import matplotlib.pyplot as plt 
 import pandas as pd 
 import seaborn as sns
 import missingno as msno 
-import matplotlib.pyplot as plt 
+import xgboost as xgb 
+import gensim
 from io import StringIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
@@ -25,6 +26,10 @@ from bs4 import BeautifulSoup
 from numpy import random
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDClassifier
+from gensim.models import Word2Vec
+from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import roc_auc_score
 
 #%%
 productos_val = pd.read_csv('Validation.csv', header=None, names = ['label','title','is_validated_by_human'], error_bad_lines=False,skiprows=1)

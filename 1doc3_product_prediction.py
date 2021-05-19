@@ -1,12 +1,13 @@
 #%% Librerias utilizadas 
 import re
 import nltk
-import gensim
 import numpy as np
+import matplotlib.pyplot as plt 
 import pandas as pd 
 import seaborn as sns
 import missingno as msno 
-import matplotlib.pyplot as plt 
+import xgboost as xgb 
+import gensim
 from io import StringIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
@@ -25,6 +26,10 @@ from bs4 import BeautifulSoup
 from numpy import random
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDClassifier
+from gensim.models import Word2Vec
+from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import roc_auc_score
 #%% LECTURA DE LOS ARCHIVOS 
 productos_train = pd.read_csv('Train.csv', header=None, names = ['label','title','is_validated_by_human'], error_bad_lines=False,skiprows=1)
 productos_train.head()
@@ -125,6 +130,9 @@ def clean_text(text):
 productos_train['title'] = productos_train['title'].apply(clean_text)
 
 #%%
+productos_train = productos_train[productos_train['title'].notna()]
+
+#%%
 productos_train.to_csv('new_train.csv', encoding='utf-8', index=False)
 #%% EN ESTE PUNTO YA SE ELIMINARON LAS COLUMNAS ANTIGUAS  Y QUEDARON LIMPIOS LOS DATOS 
 productos_train.head()
@@ -162,6 +170,3 @@ productos_train.groupby('labels')['is_validated_by_humans'].mean().plot.bar()
 plt.ylabel('Porcentaje de anotaciones')
 plt.title('Distribución de las anotaciones validadas por humanos')
 plt.show()
-
-
- 

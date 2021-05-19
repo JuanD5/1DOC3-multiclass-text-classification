@@ -1,11 +1,13 @@
 #%%
-import pandas as pd 
 import re
 import nltk
 import numpy as np
 import matplotlib.pyplot as plt 
+import pandas as pd 
 import seaborn as sns
 import missingno as msno 
+import xgboost as xgb 
+import gensim
 from io import StringIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
@@ -20,11 +22,14 @@ from sklearn.metrics import confusion_matrix
 from sklearn.svm import LinearSVC
 from sklearn.feature_selection import chi2
 from sklearn import metrics
-import gensim
 from bs4 import BeautifulSoup
 from numpy import random
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDClassifier
+from gensim.models import Word2Vec
+from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import roc_auc_score
 #%% DATOS DE ENTRENAMIENTO
 train_data = pd.read_csv('new_train.csv')
 train_data.head()
@@ -73,7 +78,7 @@ y_pred = modelo.predict(X_test)
 conf_mat = confusion_matrix(y_test, y_pred)
 fig, ax = plt.subplots(figsize=(10,10))
 sns.heatmap(conf_mat, annot=True, fmt='d',
-            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_val_data.labels.values)
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.show()
@@ -95,7 +100,7 @@ y_pred = modelo2.predict(X_test)
 conf_mat = confusion_matrix(y_test, y_pred)
 fig, ax = plt.subplots(figsize=(10,10))
 sns.heatmap(conf_mat, annot=True, fmt='d',
-            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_val_data.labels.values)
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.show()
@@ -121,7 +126,7 @@ y_pred = nb.predict(X_test)
 conf_mat = confusion_matrix(y_test, y_pred)
 fig, ax = plt.subplots(figsize=(10,10))
 sns.heatmap(conf_mat, annot=True, fmt='d',
-            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_val_data.labels.values)
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.show()
@@ -143,7 +148,7 @@ y_pred = sgd.predict(X_test)
 conf_mat = confusion_matrix(y_test, y_pred)
 fig, ax = plt.subplots(figsize=(10,10))
 sns.heatmap(conf_mat, annot=True, fmt='d',
-            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_val_data.labels.values)
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.show()
@@ -163,7 +168,7 @@ y_pred = logreg.predict(X_test)
 conf_mat = confusion_matrix(y_test, y_pred)
 fig, ax = plt.subplots(figsize=(10,10))
 sns.heatmap(conf_mat, annot=True, fmt='d',
-            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_val_data.labels.values)
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
 plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.show()
@@ -173,3 +178,91 @@ print(" La precisión para el modelo haciendo uso de regresión logística es:",
 print(" La cobertura para el modelo haciendo uso de regresión logística es:",metrics.recall_score(y_test, y_pred,average='weighted'))
 print(" El F1 score  para el modelo haciendo uso de regresión logística es:",metrics.f1_score(y_test, y_pred,average='weighted'))
 
+#%% XGBOOST 
+X_train = train_data['title']
+y_train = train_data['labels']
+X_test = val_data['title']
+y_test = val_data['labels']
+clf_xgb = Pipeline([('vect', CountVectorizer()),
+               ('tfidf', TfidfTransformer()),
+               ('clf', XGBClassifier( objective = 'reg:logistic',random_state=42, seed=2, colsample_bytree=0.6, subsample=0.7)),
+              ])
+clf_xgb.fit(X_train, y_train,clf__verbose = True,clf__eval_metric = 'aucpr')
+y_pred = clf_xgb.predict(X_test)
+conf_mat = confusion_matrix(y_test, y_pred)
+fig, ax = plt.subplots(figsize=(10,10))
+sns.heatmap(conf_mat, annot=True, fmt='d',
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.show()
+print(metrics.classification_report(y_test, y_pred, target_names=train_data['labels'].unique()))
+print(" El accuracy para el modelo haciendo uso de XGBOOST es:",metrics.accuracy_score(y_test, y_pred))
+
+#%% OPTIMIZACION DEL XGBOOST 
+
+param_grid = {'max_depth':[3,4,5],
+              'learning_rate':[0.1,0.01,0.05],
+              'gamma':[0,0.25,1],
+              'reg_lambda':[0,1.0,10.0]
+              }
+
+optimal_params = GridSearchCV(estimator=XGBClassifier( objective = 'reg:logistic',random_state=42, seed=2, colsample_bytree=0.6, subsample=0.7),
+                              param_grid= param_grid,
+                              scoring='roc_auc',
+                              verbose = 2, # 2 para ver que es lo que está haciendo esto
+                              n_jobs =10,
+                              cv = 3
+                               )
+#%%
+optimal_params.fit(X_train, y_train)
+
+# gamma = 0.25, lr = 0.05 max_depth = 5 reg_lambda = 1.0
+#%% XGBOOST CON LOS PARÁMETROS  YA OPTIMIZADOS 
+
+X_train = train_data['title']
+y_train = train_data['labels']
+X_test = val_data['title']
+y_test = val_data['labels']
+clf_xgb = Pipeline([('vect', CountVectorizer()),
+               ('tfidf', TfidfTransformer()),
+               ('clf', XGBClassifier( random_state=42,objective = 'reg:logistic',learn_rate = 0.05, gamma = 0.25, max_depth = 5, reg_lambda = 1, scale_pos_weight = 3, seed=2, colsample_bytree=0.6, subsample=0.7)),
+              ])
+clf_xgb.fit(X_train, y_train,clf__verbose = True,clf__eval_metric = 'aucpr')
+y_pred = clf_xgb.predict(X_test)
+conf_mat = confusion_matrix(y_test, y_pred)
+fig, ax = plt.subplots(figsize=(10,10))
+sns.heatmap(conf_mat, annot=True, fmt='d',
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.show()
+print(metrics.classification_report(y_test, y_pred, target_names=train_data['labels'].unique()))
+print(" El accuracy para el modelo haciendo uso de XGBOOST es:",metrics.accuracy_score(y_test, y_pred))
+
+#%% mostrando el primer árbol 
+X_train = train_data['title']
+y_train = train_data['labels']
+X_test = val_data['title']
+y_test = val_data['labels']
+clf_xgb = Pipeline([('vect', CountVectorizer()),
+               ('tfidf', TfidfTransformer()),
+               ('clf', XGBClassifier( random_state=42,objective = 'reg:logistic',learn_rate = 0.05, gamma = 0.25, max_depth = 5, reg_lambda = 1, scale_pos_weight = 3, seed=2, colsample_bytree=0.6, subsample=0.7, n_estimators = 1)),
+              ])
+clf_xgb.fit(X_train, y_train,clf__verbose = True,clf__eval_metric = 'aucpr')
+y_pred = clf_xgb.predict(X_test)
+
+#%%
+node_params = {'shape':'box',
+               'style': 'filled,rounded',
+               'fillcolor':'#78cbe'
+               }
+
+leaf_params = {'shape':'box',
+               'style': 'filled',
+               'fillcolor':'#e48038'
+               }
+               
+xgb.to_graphviz(clf_xgb,num_trees = 0, size = "10,10",
+                 condition_node_params = node_params,
+                 leaf_node_params = leaf_params)               
