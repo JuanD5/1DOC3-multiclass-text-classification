@@ -1,11 +1,12 @@
 #%% Librerias utilizadas 
-import pandas as pd 
 import re
 import nltk
+import gensim
 import numpy as np
-import matplotlib.pyplot as plt 
+import pandas as pd 
 import seaborn as sns
 import missingno as msno 
+import matplotlib.pyplot as plt 
 from io import StringIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
@@ -20,7 +21,10 @@ from sklearn.metrics import confusion_matrix
 from sklearn.svm import LinearSVC
 from sklearn.feature_selection import chi2
 from sklearn import metrics
-
+from bs4 import BeautifulSoup
+from numpy import random
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import SGDClassifier
 #%% LECTURA DE LOS ARCHIVOS 
 productos_train = pd.read_csv('Train.csv', header=None, names = ['label','title','is_validated_by_human'], error_bad_lines=False,skiprows=1)
 productos_train.head()
@@ -98,7 +102,31 @@ productos_train.drop(columns = ['label'],axis=1,inplace=True)
 
 #%%
 productos_train.drop(columns= ['is_validated_by_human'],axis=1,inplace=True)
-#%% EN ESTE PUNTO YA SE ELIMINARON LAS COLUMNAS ANTIGUAS 
+
+#%%Limpieza del texto 
+nltk.download('stopwords')
+REPLACE_BY_SPACE_RE = re.compile('[/(){}\[\]\|@,;]')
+BAD_SYMBOLS_RE = re.compile('[^0-9a-z #+_]')
+STOPWORDS = set(stopwords.words('spanish'))
+
+def clean_text(text):
+    """
+        text: a string
+        
+        return: modified initial string
+    """
+    text = BeautifulSoup(text, "html.parser").text # HTML decoding
+    text = text.lower() # lowercase text
+    text = REPLACE_BY_SPACE_RE.sub(' ', text) # replace REPLACE_BY_SPACE_RE symbols by space in text
+    text = BAD_SYMBOLS_RE.sub('', text) # delete symbols which are in BAD_SYMBOLS_RE from text
+    text = ' '.join(word for word in text.split() if word not in STOPWORDS) # delete stopwors from text
+    return text
+#%%
+productos_train['title'] = productos_train['title'].apply(clean_text)
+
+#%%
+productos_train.to_csv('new_train.csv', encoding='utf-8', index=False)
+#%% EN ESTE PUNTO YA SE ELIMINARON LAS COLUMNAS ANTIGUAS  Y QUEDARON LIMPIOS LOS DATOS 
 productos_train.head()
 
 #%%
@@ -135,71 +163,5 @@ plt.ylabel('Porcentaje de anotaciones')
 plt.title('Distribución de las anotaciones validadas por humanos')
 plt.show()
 
-#%% PREPARACIÓN DEL NUEVO DATASET 
 
-col = ['labels','title']
-productos_train = productos_train[col]
-productos_train.columns = ['labels','title']
-productos_train['labels_id'] = productos_train['labels'].factorize()[0]
-labels_id_productos_train = productos_train[['labels','labels_id']].drop_duplicates().sort_values('labels_id')
-labels_to_id = dict(labels_id_productos_train.values)
-id_to_labels = dict(labels_id_productos_train[['labels_id','labels']].values)
-productos_train.head()
-
-#%% TRATAMIENTO DEL DESBALANCEO DE LOS DATOS 
-fig = plt.figure(figsize = (8,6))
-productos_train.groupby('labels').title.count().plot.bar(ylim=0)
-plt.show()
-
-#%%
-nltk.download('stopwords')
-
-
-#%%
-tfidf = TfidfVectorizer(sublinear_tf=True, min_df=5, norm ='l2',encoding='latin-1',ngram_range = (1,2),stop_words = stopwords.words('spanish'))
-features = tfidf.fit_transform(productos_train.title).toarray()
-new_labels = productos_train.labels_id.astype(np.uint8)
-#%%
-features.shape
-
-#%% los unigramas y bigramas mas relacionados con cada una de las anotaciones 
-N = 2
-for Product, category_id in sorted(labels_to_id.items()):
-  features_chi2 = chi2(features, new_labels == category_id)
-  indices = np.argsort(features_chi2[0])
-  feature_names = np.array(tfidf.get_feature_names())[indices]
-  unigrams = [v for v in feature_names if len(v.split(' ')) == 1]
-  bigrams = [v for v in feature_names if len(v.split(' ')) == 2]
-  print("# '{}':".format(Product))
-  print("  . Most correlated unigrams:\n. {}".format('\n. '.join(unigrams[-N:])))
-  print("  . Most correlated bigrams:\n. {}".format('\n. '.join(bigrams[-N:])))
-
-
-#%% NAIVE BAYES CLASSIFIER MULTINOMIAL 
-
-X_train, X_test, y_train, y_test = train_test_split(productos_train['title'], productos_train['labels'], random_state = 0)
-count_vect = CountVectorizer()
-X_train_counts = count_vect.fit_transform(X_train)
-tfidf_transformer = TfidfTransformer()
-X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
-clf = MultinomialNB().fit(X_train_tfidf, y_train)
-
-#%%
-print(clf.predict(count_vect.transform(["ipad mini en excelente estado."])))
-
-#%%
-model = LinearSVC()
-X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(features, new_labels, productos_train.index, test_size=0.33, random_state=0)
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
-conf_mat = confusion_matrix(y_test, y_pred)
-fig, ax = plt.subplots(figsize=(10,10))
-sns.heatmap(conf_mat, annot=True, fmt='d',
-            xticklabels=labels_id_productos_train.labels.values, yticklabels=labels_id_productos_train.labels.values)
-plt.ylabel('Actual')
-plt.xlabel('Predicted')
-plt.show()
-
-#%%
-print(metrics.classification_report(y_test, y_pred, target_names=productos_train['labels'].unique()))
-print(" El accuracy para el modelo haciendo uso del SVM lineal es:",metrics.accuracy_score(y_test, y_pred))
+ 

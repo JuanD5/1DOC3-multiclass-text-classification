@@ -1,11 +1,12 @@
 #%% Librerias utilizadas 
-import pandas as pd 
 import re
 import nltk
+import gensim
 import numpy as np
-import matplotlib.pyplot as plt 
+import pandas as pd 
 import seaborn as sns
 import missingno as msno 
+import matplotlib.pyplot as plt 
 from io import StringIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
@@ -20,6 +21,10 @@ from sklearn.metrics import confusion_matrix
 from sklearn.svm import LinearSVC
 from sklearn.feature_selection import chi2
 from sklearn import metrics
+from bs4 import BeautifulSoup
+from numpy import random
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import SGDClassifier
 
 #%%
 productos_val = pd.read_csv('Validation.csv', header=None, names = ['label','title','is_validated_by_human'], error_bad_lines=False,skiprows=1)
@@ -93,3 +98,26 @@ productos_val.drop(columns= ['is_validated_by_human'],axis=1,inplace=True)
 productos_val['labels'].value_counts()
 #%%
 productos_val['is_validated_by_humans'].value_counts()
+
+#%%Limpieza del texto 
+nltk.download('stopwords')
+REPLACE_BY_SPACE_RE = re.compile('[/(){}\[\]\|@,;]')
+BAD_SYMBOLS_RE = re.compile('[^0-9a-z #+_]')
+STOPWORDS = set(stopwords.words('spanish'))
+
+def clean_text(text):
+    """
+        text: a string
+        
+        return: modified initial string
+    """
+    text = BeautifulSoup(text, "html.parser").text # HTML decoding
+    text = text.lower() # lowercase text
+    text = REPLACE_BY_SPACE_RE.sub(' ', text) # replace REPLACE_BY_SPACE_RE symbols by space in text
+    text = BAD_SYMBOLS_RE.sub('', text) # delete symbols which are in BAD_SYMBOLS_RE from text
+    text = ' '.join(word for word in text.split() if word not in STOPWORDS) # delete stopwors from text
+    return text
+#%%
+productos_val['title'] = productos_val['title'].apply(clean_text)
+#%%
+productos_val.to_csv('new_val.csv', encoding='utf-8', index=False)
