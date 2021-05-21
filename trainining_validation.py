@@ -32,7 +32,10 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import roc_auc_score
 #%% DATOS DE ENTRENAMIENTO
 train_data = pd.read_csv('new_train.csv')
-train_data.head()
+train_data= train_data[train_data['title'].notna()]
+
+#%%
+train_data.isnull().sum()
 #%% DATOS DE VALIDACIÓN 
 val_data = pd.read_csv('new_val.csv')
 val_data.head() 
@@ -238,31 +241,43 @@ plt.ylabel('Actual')
 plt.xlabel('Predicted')
 plt.show()
 print(metrics.classification_report(y_test, y_pred, target_names=train_data['labels'].unique()))
-print(" El accuracy para el modelo haciendo uso de XGBOOST es:",metrics.accuracy_score(y_test, y_pred))
+print(" El accuracy para el modelo haciendo uso de XGBOOST transformer es:",metrics.accuracy_score(y_test, y_pred))
 
-#%% mostrando el primer árbol 
+#%%  ESTE RESULTO SER EL MEJOR MÉTODO 
+
 X_train = train_data['title']
 y_train = train_data['labels']
 X_test = val_data['title']
 y_test = val_data['labels']
-clf_xgb = Pipeline([('vect', CountVectorizer()),
-               ('tfidf', TfidfTransformer()),
-               ('clf', XGBClassifier( random_state=42,objective = 'reg:logistic',learn_rate = 0.05, gamma = 0.25, max_depth = 5, reg_lambda = 1, scale_pos_weight = 3, seed=2, colsample_bytree=0.6, subsample=0.7, n_estimators = 1)),
+clf_xgb = Pipeline([
+               ('tfidf', TfidfVectorizer(sublinear_tf=True, min_df=5, norm ='l2',encoding='latin-1',ngram_range = (1,2),stop_words = stopwords.words('spanish'))),
+               ('clf', XGBClassifier( random_state=42,objective = 'reg:logistic',learn_rate = 0.05, gamma = 0.25, max_depth = 5, reg_lambda = 1, scale_pos_weight = 3, seed=2, colsample_bytree=0.6, subsample=0.7)),
               ])
 clf_xgb.fit(X_train, y_train,clf__verbose = True,clf__eval_metric = 'aucpr')
 y_pred = clf_xgb.predict(X_test)
+conf_mat = confusion_matrix(y_test, y_pred)
+fig, ax = plt.subplots(figsize=(10,10))
+sns.heatmap(conf_mat, annot=True, fmt='d',
+            xticklabels=labels_id_train_data.labels.values, yticklabels=labels_id_train_data.labels.values)
+plt.ylabel('Actual')
+plt.xlabel('Predicted')
+plt.show()
+print(metrics.classification_report(y_test, y_pred, target_names=train_data['labels'].unique()))
+print(" El accuracy para el modelo haciendo uso de XGBOOST  VECTORIZER es:",metrics.accuracy_score(y_test, y_pred))
 
-#%%
-node_params = {'shape':'box',
-               'style': 'filled,rounded',
-               'fillcolor':'#78cbe'
-               }
+y_prob = clf_xgb.predict_proba(X_test)
 
-leaf_params = {'shape':'box',
-               'style': 'filled',
-               'fillcolor':'#e48038'
-               }
-               
-xgb.to_graphviz(clf_xgb,num_trees = 0, size = "10,10",
-                 condition_node_params = node_params,
-                 leaf_node_params = leaf_params)               
+macro_roc_auc_ovo = roc_auc_score(y_test, y_prob, multi_class="ovo",
+                                  average="macro")
+weighted_roc_auc_ovo = roc_auc_score(y_test, y_prob, multi_class="ovo",
+                                     average="weighted")
+macro_roc_auc_ovr = roc_auc_score(y_test, y_prob, multi_class="ovr",
+                                  average="macro")
+weighted_roc_auc_ovr = roc_auc_score(y_test, y_prob, multi_class="ovr",
+                                     average="weighted")
+print(" El UNO-vs-UNO ROC AUC score:\n{:.6f} (macro),\n{:.6f} "
+      "(pesado por prevalencia de las clases)"
+      .format(macro_roc_auc_ovo, weighted_roc_auc_ovo))
+print("El Uno-vs-El RESTO ROC AUC score:\n{:.6f} (macro),\n{:.6f} "
+      "(pesado por prevalencia de las clases)"
+      .format(macro_roc_auc_ovr, weighted_roc_auc_ovr))

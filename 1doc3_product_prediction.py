@@ -44,20 +44,20 @@ productos_train['label'].value_counts()
 productos_train['title'].value_counts()
 productos_train['is_validated_by_human'].value_counts()
 #%%
-lista_malos = []
+bad_labels_train = []
 for i in productos_train['label']:
     if len(i) > 10:
-        lista_malos.append(i)
+        bad_labels_train.append(i)
         
 #%%
 index = productos_train.index
-for i in range(len(lista_malos)):
-    condition = productos_train['label'] == lista_malos[i] # esto siempre se debe cumplir porque los de lista malos vienen del dataset original 
+for i in range(len(bad_labels_train)):
+    condition = productos_train['label'] == bad_labels_train[i] # esto siempre se debe cumplir porque los de lista malos vienen del dataset original 
     condition_indices = index[condition].tolist()
     indice = condition_indices[0]
-    title = re.findall(r'"([^"]*)"', lista_malos[i])
+    title = re.findall(r'"([^"]*)"', bad_labels_train[i])
     if len(title) >= 1:
-        label_and_validated = lista_malos[i].replace(title[0] ,'')
+        label_and_validated = bad_labels_train[i].replace(title[0] ,'')
         label_and_validated = label_and_validated.split(',')
         if len(label_and_validated) >2:
             productos_train.at[indice,'title']= title[0]

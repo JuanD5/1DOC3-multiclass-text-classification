@@ -36,20 +36,20 @@ productos_val = pd.read_csv('Validation.csv', header=None, names = ['label','tit
 productos_val.head()
 
 #%%
-lista_malos = []
+bad_labels_val = []
 for i in productos_val['label']:
     if len(i) > 10:
-        lista_malos.append(i)
+        bad_labels_val.append(i)
         
 #%%
 index = productos_val.index
-for i in range(len(lista_malos)):
-    condition = productos_val['label'] == lista_malos[i] # esto siempre se debe cumplir porque los de lista malos vienen del dataset original 
+for i in range(len(bad_labels_val)):
+    condition = productos_val['label'] == bad_labels_val[i] # esto siempre se debe cumplir porque los de lista malos vienen del dataset original 
     condition_indices = index[condition].tolist()
     indice = condition_indices[0]
-    title = re.findall(r'"([^"]*)"', lista_malos[i])
+    title = re.findall(r'"([^"]*)"', bad_labels_val[i])
     if len(title) >= 1:
-        label_and_validated = lista_malos[i].replace(title[0] ,'')
+        label_and_validated = bad_labels_val[i].replace(title[0] ,'')
         label_and_validated = label_and_validated.split(',')
         if len(label_and_validated) >2:
             productos_val.at[indice,'title']= title[0]
